@@ -108,6 +108,7 @@ def main() -> None:
             message: str = parse_status(homeworks[0])
             if homeworks and message != previous_message:
                 send_message(bot, message)
+                previous_message: str = message
             timestamp: int = int(time.time())
         except Exception as error:
             logging.error(f'Сбой в работе программы: {error}')
