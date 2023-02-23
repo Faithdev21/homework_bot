@@ -21,7 +21,7 @@ TELEGRAM_TOKEN: Optional[str] = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID: Optional[str] = os.getenv('TELEGRAM_CHAT_ID')
 updater = Updater(token=os.getenv('TELEGRAM_TOKEN'))
 
-RETRY_PERIOD: float = 600
+RETRY_PERIOD: float = 100
 ENDPOINT: Optional[str] = os.getenv('ENDPOINT')
 HEADERS: dict = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
@@ -113,7 +113,10 @@ def main() -> None:
         try:
             response: dict = get_api_answer(timestamp)
             homeworks: list = check_response(response)
-            message: str = parse_status(homeworks[0])
+            try:
+                message: str = parse_status(homeworks[0])
+            except IndexError:
+                pass
             if homeworks and message != previous_message:
                 send_message(bot, message)
                 previous_message: str = message
