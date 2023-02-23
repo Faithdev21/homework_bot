@@ -2,15 +2,17 @@ import logging
 import os
 import sys
 import time
+from http import HTTPStatus
 from typing import Optional
 
 import requests
 import telegram
 from dotenv import load_dotenv
 from requests.exceptions import RequestException
+from telegram import TelegramError
 from telegram.ext import Updater
 
-from errors import CriticalError, MessageError, StatusError
+from errors import MessageError, StatusError
 
 load_dotenv()
 
@@ -28,15 +30,21 @@ HOMEWORK_VERDICTS: dict = {
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
+CRITICAL_ERROR: str = 'Ошибка доступа к переменным окружения.'
+MESSAGE_ERROR: str = 'Произошел сбой при отправке сообщения: {}.'
+RESPONSE_TYPE: str = 'response должен быть типа dict.'
+HOMEWORK_TYPE: str = 'homework должен быть типа list.'
+STATUS_NOT_FOUND: str = 'В базовом списке нет статуса {}.'
+SEC_IN_DAY: int = 86400
 
 
 def check_tokens() -> bool:
     """Проверка доступности переменных окружения."""
     return all([TELEGRAM_TOKEN, PRACTICUM_TOKEN, TELEGRAM_CHAT_ID]) or (
-        logging.critical('Ошибка доступа к переменным окружения.'))
+        logging.critical(CRITICAL_ERROR))
 
 
-def send_message(bot, message: str) -> None:
+def send_message(bot: telegram.bot.Bot, message: str) -> None:
     """Функция отправки сообщения."""
     try:
         bot.send_message(
@@ -44,20 +52,20 @@ def send_message(bot, message: str) -> None:
             text=message,
         )
         logging.debug(f'Произошла удачная отправка сообщения {message}.')
-    except Exception as error:
-        logging.error(f'Произошел сбой при отправке сообщения: {error}.')
-        raise MessageError(f'Произошел сбой при отправке сообщения {error}.')
+    except TelegramError as error:
+        logging.error(MESSAGE_ERROR.format(error))
+        raise MessageError(MESSAGE_ERROR.format(error))
 
 
 def get_api_answer(timestamp: float) -> dict:
     """Делает запрос к эндпоинту."""
-    payload = {'from_date': timestamp}
+    payload: dict = {'from_date': timestamp}
     try:
         response = requests.get(url=ENDPOINT, headers=HEADERS, params=payload)
     except RequestException as error:
         logging.error(f'Ошибка в запросе к API: {error}')
         raise ConnectionError(error)
-    if response.status_code != 200:
+    if response.status_code != HTTPStatus.OK:
         raise StatusError(
             f'Ожидаемый код статуса 200, но был получен {response.status_code}'
         )
@@ -67,16 +75,16 @@ def get_api_answer(timestamp: float) -> dict:
 
 def check_response(response: dict) -> list:
     """Проверка ответа API на соответствие документации."""
-    if type(response) is not dict:
-        logging.error('response должен быть типа типа dict.')
-        raise TypeError('response должен быть типа типа dict.')
+    if not isinstance(response, dict):
+        logging.error(RESPONSE_TYPE)
+        raise TypeError(RESPONSE_TYPE)
     if 'homeworks' not in response:
         logging.error('В полученном словаре нет ключа homeworks.')
 
-    if type(response.get('homeworks')) is not list:
-        logging.error('homeworks должен быть типа list.')
-        raise TypeError('homeworks должен быть типа list.')
-    return response.get('homeworks')
+    if not isinstance(response.get('homeworks'), list):
+        logging.error(HOMEWORK_TYPE)
+        raise TypeError(HOMEWORK_TYPE)
+    return response['homeworks']
 
 
 def parse_status(homework: dict) -> str:
@@ -88,17 +96,17 @@ def parse_status(homework: dict) -> str:
         logging.error('В API домашней работы нет ключа homework_name')
         raise KeyError('Отсутствует ключ homework_name')
     if status not in HOMEWORK_VERDICTS:
-        logging.error(f'В базовом списке нет статуса {status}')
-        raise TypeError('TypeError')
+        logging.error(STATUS_NOT_FOUND.format(status))
+        raise KeyError(STATUS_NOT_FOUND.format(status))
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def main() -> None:
     """Основная логика работы бота."""
     if not check_tokens():
-        raise CriticalError('Ошибка доступа к переменным окружения')
-    bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    timestamp: int = int(time.time())
+        sys.exit()
+    bot: telegram.bot.Bot = telegram.Bot(token=TELEGRAM_TOKEN)
+    timestamp: int = int(time.time()) - SEC_IN_DAY
     message: str = ''
     previous_message: str = ''
     while True:
@@ -109,7 +117,7 @@ def main() -> None:
             if homeworks and message != previous_message:
                 send_message(bot, message)
                 previous_message: str = message
-            timestamp: int = int(time.time())
+            timestamp: int = int(time.time()) - SEC_IN_DAY
         except Exception as error:
             logging.error(f'Сбой в работе программы: {error}')
         time.sleep(RETRY_PERIOD)
