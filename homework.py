@@ -21,7 +21,7 @@ TELEGRAM_TOKEN: Optional[str] = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID: Optional[str] = os.getenv('TELEGRAM_CHAT_ID')
 updater = Updater(token=os.getenv('TELEGRAM_TOKEN'))
 
-RETRY_PERIOD: float = 100
+RETRY_PERIOD: float = 600
 ENDPOINT: Optional[str] = os.getenv('ENDPOINT')
 HEADERS: dict = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
