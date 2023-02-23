@@ -149,4 +149,6 @@ dmypy.json
 static/
 posts/static/
 media/
+/Scripts
+/homework_bot.zip
 
