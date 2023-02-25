@@ -6,5 +6,5 @@ class MessageError(Exception):
     """Сообщение не было доставлено."""
 
 
-class CriticalError(Exception):
-    """Нет доступа к переменным окружения."""
+class UnsupportedStatusError(Exception):
+    """Неподдерживаемый статус."""

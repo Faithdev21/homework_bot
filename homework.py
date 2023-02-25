@@ -12,7 +12,7 @@ from requests.exceptions import RequestException
 from telegram import TelegramError
 from telegram.ext import Updater
 
-from errors import MessageError, StatusError
+from errors import MessageError, StatusError, UnsupportedStatusError
 
 load_dotenv()
 
@@ -31,10 +31,8 @@ HOMEWORK_VERDICTS: dict = {
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
 CRITICAL_ERROR: str = 'Ошибка доступа к переменным окружения.'
-MESSAGE_ERROR: str = 'Произошел сбой при отправке сообщения: {}.'
 RESPONSE_TYPE: str = 'response должен быть типа dict.'
 HOMEWORK_TYPE: str = 'homework должен быть типа list.'
-STATUS_NOT_FOUND: str = 'В базовом списке нет статуса {}.'
 SEC_IN_DAY: int = 86400
 
 
@@ -53,8 +51,10 @@ def send_message(bot: telegram.bot.Bot, message: str) -> None:
         )
         logging.debug(f'Произошла удачная отправка сообщения {message}.')
     except TelegramError as error:
-        logging.error(MESSAGE_ERROR.format(error))
-        raise MessageError(MESSAGE_ERROR.format(error))
+        error_message: str = (
+            'Произошел сбой при отправке сообщения: {}.'.format(error))
+        logging.error(error_message)
+        raise MessageError(error_message)
 
 
 def get_api_answer(timestamp: float) -> dict:
@@ -96,15 +96,20 @@ def parse_status(homework: dict) -> str:
         logging.error('В API домашней работы нет ключа homework_name')
         raise KeyError('Отсутствует ключ homework_name')
     if status not in HOMEWORK_VERDICTS:
-        logging.error(STATUS_NOT_FOUND.format(status))
-        raise KeyError(STATUS_NOT_FOUND.format(status))
+        status_not_found: str = (
+            'В базовом списке нет статуса {}.'.format(status))
+        logging.error(status_not_found)
+        raise UnsupportedStatusError(status_not_found)
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def main() -> None:
     """Основная логика работы бота."""
     if not check_tokens():
-        sys.exit()
+        sys.exit(
+            'Работа программы прервана по причине'
+            'отсутствия доступа к переменным окружения.'
+        )
     bot: telegram.bot.Bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp: int = int(time.time()) - SEC_IN_DAY
     message: str = ''
@@ -116,7 +121,10 @@ def main() -> None:
             try:
                 message: str = parse_status(homeworks[0])
             except IndexError:
-                pass
+                logging.info(
+                    'Обновления отсутствуют.'
+                    'Программа работает корректно.'
+                )
             if homeworks and message != previous_message:
                 send_message(bot, message)
                 previous_message: str = message
